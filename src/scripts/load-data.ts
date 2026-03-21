@@ -89,7 +89,8 @@ async function createTables(db: any) {
 
     await db.exec(`
       CREATE TABLE brief_descriptions (
-        character_id INTEGER PRIMARY KEY,
+        character_id INTEGER NOT NULL,
+        element_type TEXT,
         combat1 TEXT,
         combat2 TEXT,
         combat3 TEXT,
@@ -105,6 +106,7 @@ async function createTables(db: any) {
         c6 TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (character_id, element_type),
         FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
       )
     `);
@@ -362,28 +364,63 @@ async function loadDataFromJSON() {
           );
           
           if (char) {
-            await db.run(
-              `INSERT OR REPLACE INTO brief_descriptions 
-              (character_id, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                char.id,
-                briefData.combat1 || null,
-                briefData.combat2 || null,
-                briefData.combat3 || null,
-                briefData.passive1 || null,
-                briefData.passive2 || null,
-                briefData.passive3 || null,
-                briefData.passive4 || null,
-                briefData.c1 || null,
-                briefData.c2 || null,
-                briefData.c3 || null,
-                briefData.c4 || null,
-                briefData.c5 || null,
-                briefData.c6 || null,
-              ]
-            );
-            count++;
+            // Check if brief descriptions are grouped by element type (variant-specific)
+            const isVariantGrouped = Object.keys(briefData).some(key => key.startsWith('ELEMENT_'));
+            
+            if (isVariantGrouped) {
+              // Load variant-specific brief descriptions
+              for (const [elementType, briefContent] of Object.entries(briefData)) {
+                const content = briefContent as any;
+                await db.run(
+                  `INSERT OR REPLACE INTO brief_descriptions 
+                  (character_id, element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    char.id,
+                    elementType,
+                    content.combat1 || null,
+                    content.combat2 || null,
+                    content.combat3 || null,
+                    content.passive1 || null,
+                    content.passive2 || null,
+                    content.passive3 || null,
+                    content.passive4 || null,
+                    content.c1 || null,
+                    content.c2 || null,
+                    content.c3 || null,
+                    content.c4 || null,
+                    content.c5 || null,
+                    content.c6 || null,
+                  ]
+                );
+                count++;
+              }
+            } else {
+              // Load flat brief descriptions
+              await db.run(
+                `INSERT OR REPLACE INTO brief_descriptions 
+                (character_id, element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  char.id,
+                  null,
+                  briefData.combat1 || null,
+                  briefData.combat2 || null,
+                  briefData.combat3 || null,
+                  briefData.passive1 || null,
+                  briefData.passive2 || null,
+                  briefData.passive3 || null,
+                  briefData.passive4 || null,
+                  briefData.c1 || null,
+                  briefData.c2 || null,
+                  briefData.c3 || null,
+                  briefData.c4 || null,
+                  briefData.c5 || null,
+                  briefData.c6 || null,
+                ]
+              );
+              count++;
+            }
           } else {
             console.warn(`   ⚠️  Character not found for brief description: ${characterName}`);
           }

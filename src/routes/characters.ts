@@ -116,12 +116,67 @@ router.get('/:id', async (req: Request, res: Response) => {
     }
 
     // Load brief descriptions if available
-    const brief: any = await db.get(
-      `SELECT combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 
-       FROM brief_descriptions 
-       WHERE character_id = ?`,
-      [character.id]
-    );
+    // For characters with variants, brief descriptions are stored per-element
+    // For regular characters, they're stored with element_type = NULL
+    let briefDescriptions: any = undefined;
+    
+    if (variants) {
+      // Character has variants - load variant-specific brief descriptions
+      const variantBriefs: any = await db.all(
+        `SELECT element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 
+         FROM brief_descriptions 
+         WHERE character_id = ? AND element_type IS NOT NULL`,
+        [character.id]
+      );
+      
+      if (variantBriefs && variantBriefs.length > 0) {
+        briefDescriptions = {};
+        for (const brief of variantBriefs) {
+          const elementType = brief.element_type;
+          briefDescriptions[elementType] = {
+            combat1: brief.combat1,
+            combat2: brief.combat2,
+            combat3: brief.combat3,
+            passive1: brief.passive1,
+            passive2: brief.passive2,
+            passive3: brief.passive3,
+            passive4: brief.passive4,
+            c1: brief.c1,
+            c2: brief.c2,
+            c3: brief.c3,
+            c4: brief.c4,
+            c5: brief.c5,
+            c6: brief.c6,
+          };
+        }
+      }
+    } else {
+      // Regular character - load flat brief descriptions
+      const brief: any = await db.get(
+        `SELECT combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 
+         FROM brief_descriptions 
+         WHERE character_id = ? AND element_type IS NULL`,
+        [character.id]
+      );
+      
+      if (brief) {
+        briefDescriptions = {
+          combat1: brief.combat1,
+          combat2: brief.combat2,
+          combat3: brief.combat3,
+          passive1: brief.passive1,
+          passive2: brief.passive2,
+          passive3: brief.passive3,
+          passive4: brief.passive4,
+          c1: brief.c1,
+          c2: brief.c2,
+          c3: brief.c3,
+          c4: brief.c4,
+          c5: brief.c5,
+          c6: brief.c6,
+        };
+      }
+    }
 
     const result: CharacterResolved = {
       profile: resolvedProfile,
@@ -132,22 +187,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     };
 
     // Add brief descriptions if they exist
-    if (brief) {
-      (result as any).brief = {
-        combat1: brief.combat1,
-        combat2: brief.combat2,
-        combat3: brief.combat3,
-        passive1: brief.passive1,
-        passive2: brief.passive2,
-        passive3: brief.passive3,
-        passive4: brief.passive4,
-        c1: brief.c1,
-        c2: brief.c2,
-        c3: brief.c3,
-        c4: brief.c4,
-        c5: brief.c5,
-        c6: brief.c6,
-      };
+    if (briefDescriptions) {
+      (result as any).brief = briefDescriptions;
     }
 
     res.json(result);

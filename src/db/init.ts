@@ -104,9 +104,11 @@ async function createTables(db: Database): Promise<void> {
   `);
 
   // Brief descriptions table (Hungarian translations of skill/constellation descriptions)
+  // Supports both flat descriptions for regular characters and variant-specific descriptions for characters like Traveler
   await db.exec(`
     CREATE TABLE IF NOT EXISTS brief_descriptions (
-      character_id INTEGER PRIMARY KEY,
+      character_id INTEGER NOT NULL,
+      element_type TEXT,
       combat1 TEXT,
       combat2 TEXT,
       combat3 TEXT,
@@ -122,6 +124,7 @@ async function createTables(db: Database): Promise<void> {
       c6 TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (character_id, element_type),
       FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
     )
   `);

@@ -213,15 +213,16 @@ router.delete('/weapons/:id', async (req: Request, res: Response) => {
 
 // ============ BRIEF DESCRIPTIONS ============
 
-// GET /admin/briefdescriptions/:character_id - Get brief descriptions
+// GET /admin/briefdescriptions/:character_id - Get brief descriptions (optionally for a specific variant)
 router.get('/briefdescriptions/:character_id', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
     const { character_id } = req.params;
+    const { element_type } = req.query;
 
     const brief = await db.get(
-      'SELECT * FROM brief_descriptions WHERE character_id = ?',
-      [character_id]
+      'SELECT * FROM brief_descriptions WHERE character_id = ? AND element_type = ?',
+      [character_id, element_type || null]
     );
 
     if (!brief) {
@@ -235,11 +236,11 @@ router.get('/briefdescriptions/:character_id', async (req: Request, res: Respons
   }
 });
 
-// POST /admin/briefdescriptions - Create brief descriptions
+// POST /admin/briefdescriptions - Create brief descriptions (with optional element_type for variants)
 router.post('/briefdescriptions', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
-    const { character_id, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 } = req.body;
+    const { character_id, element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 } = req.body;
 
     if (!character_id) {
       return res.status(400).json({ error: 'Missing required field: character_id' });
@@ -253,26 +254,29 @@ router.post('/briefdescriptions', async (req: Request, res: Response) => {
 
     await db.run(
       `INSERT OR REPLACE INTO brief_descriptions 
-      (character_id, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [character_id, combat1 || null, combat2 || null, combat3 || null, passive1 || null, passive2 || null, passive3 || null, passive4 || null, c1 || null, c2 || null, c3 || null, c4 || null, c5 || null, c6 || null]
+      (character_id, element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [character_id, element_type || null, combat1 || null, combat2 || null, combat3 || null, passive1 || null, passive2 || null, passive3 || null, passive4 || null, c1 || null, c2 || null, c3 || null, c4 || null, c5 || null, c6 || null]
     );
 
-    res.status(201).json({ character_id, message: 'Brief descriptions created' });
+    res.status(201).json({ character_id, element_type: element_type || null, message: 'Brief descriptions created' });
   } catch (error) {
     console.error('Error creating brief descriptions:', error);
     res.status(500).json({ error: 'Failed to create brief descriptions' });
   }
 });
 
-// PUT /admin/briefdescriptions/:character_id - Update brief descriptions
+// PUT /admin/briefdescriptions/:character_id - Update brief descriptions (optionally for a specific variant)
 router.put('/briefdescriptions/:character_id', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
     const { character_id } = req.params;
-    const { combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 } = req.body;
+    const { element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6 } = req.body;
 
-    const brief = await db.get('SELECT * FROM brief_descriptions WHERE character_id = ?', [character_id]);
+    const brief = await db.get(
+      'SELECT * FROM brief_descriptions WHERE character_id = ? AND element_type = ?',
+      [character_id, element_type || null]
+    );
     if (!brief) {
       return res.status(404).json({ error: 'Brief descriptions not found' });
     }
@@ -280,7 +284,7 @@ router.put('/briefdescriptions/:character_id', async (req: Request, res: Respons
     await db.run(
       `UPDATE brief_descriptions 
       SET combat1 = ?, combat2 = ?, combat3 = ?, passive1 = ?, passive2 = ?, passive3 = ?, passive4 = ?, c1 = ?, c2 = ?, c3 = ?, c4 = ?, c5 = ?, c6 = ?, updated_at = CURRENT_TIMESTAMP 
-      WHERE character_id = ?`,
+      WHERE character_id = ? AND element_type = ?`,
       [
         combat1 ?? brief.combat1,
         combat2 ?? brief.combat2,
@@ -295,24 +299,29 @@ router.put('/briefdescriptions/:character_id', async (req: Request, res: Respons
         c4 ?? brief.c4,
         c5 ?? brief.c5,
         c6 ?? brief.c6,
-        character_id
+        character_id,
+        element_type || null
       ]
     );
 
-    res.json({ character_id, message: 'Brief descriptions updated' });
+    res.json({ character_id, element_type: element_type || null, message: 'Brief descriptions updated' });
   } catch (error) {
     console.error('Error updating brief descriptions:', error);
     res.status(500).json({ error: 'Failed to update brief descriptions' });
   }
 });
 
-// DELETE /admin/briefdescriptions/:character_id - Delete brief descriptions
+// DELETE /admin/briefdescriptions/:character_id - Delete brief descriptions (optionally for a specific variant)
 router.delete('/briefdescriptions/:character_id', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
     const { character_id } = req.params;
+    const { element_type } = req.query;
 
-    const result = await db.run('DELETE FROM brief_descriptions WHERE character_id = ?', [character_id]);
+    const result = await db.run(
+      'DELETE FROM brief_descriptions WHERE character_id = ? AND element_type = ?',
+      [character_id, element_type || null]
+    );
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Brief descriptions not found' });

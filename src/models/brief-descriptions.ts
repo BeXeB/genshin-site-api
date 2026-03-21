@@ -1,3 +1,5 @@
+import { ElementType } from './enums';
+
 export type BriefDescriptions = {
   combat1?: string;
   combat2?: string;
@@ -13,3 +15,8 @@ export type BriefDescriptions = {
   c5?: string;
   c6?: string;
 };
+
+// Brief descriptions can be either flat (for regular characters) or per-variant (for characters like Traveler)
+export type BriefDescriptionsMap =
+  | BriefDescriptions
+  | Partial<Record<ElementType, BriefDescriptions>>;

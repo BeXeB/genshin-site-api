@@ -36,8 +36,8 @@ export type CharacterTalents = {
   id: number;
   name: string;
   combat1: CombatTalent;
-  combat2: CombatTalent;
-  combat3: CombatTalent;
+  combat2?: CombatTalent;
+  combat3?: CombatTalent;
   passive1: PassiveTalent;
   passive2: PassiveTalent;
   passive3?: PassiveTalent;
@@ -67,7 +67,7 @@ export type CombatTalent = {
 
 export type PassiveTalent = {
   name: string;
-  descriptionRaw: string;
+  descriptionRaw?: string;
   description: string;
 };
 
@@ -109,6 +109,24 @@ export type ConstellationDetail = {
   description: string;
 };
 
+export type CharacterBriefDescriptions = {
+  combat1: string;
+  combat2: string;
+  combat3: string;
+
+  passive1: string;
+  passive2: string;
+  passive3?: string;
+  passive4?: string;
+
+  c1: string;
+  c2: string;
+  c3: string;
+  c4: string;
+  c5: string;
+  c6: string;
+};
+
 export type Character = {
   profile: CharacterProfile;
   skills?: CharacterTalents;
@@ -135,10 +153,12 @@ export type CharacterResolved = {
   skills?: CharacterTalentsResolved;
   stats: CharacterStats;
   constellation?: CharacterConstellation;
+  brief?: CharacterBriefDescriptions;
   variants?: Partial<Record<ElementType, CharacterVariantResolved>>;
 };
 
 export type CharacterVariantResolved = {
   skills: CharacterTalentsResolved;
   constellation: CharacterConstellation;
+  brief?: CharacterBriefDescriptions;
 };

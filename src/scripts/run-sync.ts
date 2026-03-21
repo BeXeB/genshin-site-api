@@ -84,27 +84,17 @@ async function main() {
 
           case 'icons':
             {
-              // Organize icons from raw_icons to backend/public/images
-              const sourceDir = path.resolve(
-                __dirname,
-                '../../..',
-                'genshin-site',
-                'raw_icons'
-              );
-              const targetDir = path.resolve(
-                __dirname,
-                '../../public/images'
-              );
+              // Organize icons from backend `raw_icons` to backend/public/images
+                const sourceDir = path.resolve(__dirname, '../../raw-icons');
+                const targetDir = path.resolve(__dirname, '../../public/images');
 
-              if (!fs.existsSync(sourceDir)) {
-                console.error(`❌ Source directory not found: ${sourceDir}`);
-                console.log(
-                  '   Ensure Frontend/raw_icons/ exists and is populated'
-                );
-                continue;
-              }
+                if (!fs.existsSync(sourceDir)) {
+                  console.error(`❌ Source directory not found: ${sourceDir}`);
+                  console.log('   Ensure backend/raw_icons/ exists and is populated');
+                  continue;
+                }
 
-              stats = await organizeIcons(db, sourceDir, targetDir);
+                stats = await organizeIcons(db, sourceDir, targetDir);
             }
             break;
 

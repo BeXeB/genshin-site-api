@@ -10,33 +10,27 @@ router.get('/', async (req: Request, res: Response) => {
     const db = req.app.locals.db;
     const { type, rarity } = req.query;
 
-    let query = `
-      SELECT weapon_data
-      FROM weapons
-    `;
-    const params: any[] = [];
-    const conditions: string[] = [];
+    const weapons = await db.all(
+      `SELECT id, normalized_name, data FROM weapons ORDER BY normalized_name`
+    );
+
+    // Parse and filter
+    let parsed = weapons
+      .map((weap: any) => {
+        try {
+          return JSON.parse(weap.data) as Weapon;
+        } catch (e: any) {
+          return null;
+        }
+      })
+      .filter((weap: any): weap is Weapon => weap !== null);
 
     if (type) {
-      conditions.push('weapon_type = ?');
-      params.push(type);
+      parsed = parsed.filter((weap: Weapon) => weap.weaponType === type);
     }
     if (rarity) {
-      conditions.push('rarity = ?');
-      params.push(parseInt(rarity as string));
+      parsed = parsed.filter((weap: Weapon) => weap.rarity === parseInt(rarity as string));
     }
-
-    if (conditions.length > 0) {
-      query += ' WHERE ' + conditions.join(' AND ');
-    }
-
-    const weapons = await db.all(query, params);
-    
-    // Parse weapon_data and return full Weapon objects
-    const parsed = weapons.map((w: any) => {
-      const weaponData = JSON.parse(w.weapon_data);
-      return weaponData;
-    });
 
     res.json(parsed);
   } catch (error) {
@@ -45,7 +39,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/weapons/:id - Get weapon details (fully resolved)
+// GET /api/weapons/:id - Get weapon details
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
@@ -53,7 +47,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const weapon: any = await db.get(
-      `SELECT weapon_data FROM weapons WHERE id = ? OR normalized_name = ?`,
+      `SELECT id, normalized_name, data FROM weapons WHERE id = ? OR normalized_name = ?`,
       [isNaN(Number(id)) ? null : Number(id), id]
     );
 
@@ -61,27 +55,21 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Weapon not found' });
     }
 
-    const weaponData = JSON.parse(weapon.weapon_data) as Weapon;
-
-    // Resolve costs if present
-    const resolvedCosts: any = {};
-    if (weaponData.costs) {
-      for (const [key, items] of Object.entries(weaponData.costs)) {
-        if (items) {
-          resolvedCosts[key] = resolveCostRecord(
-            { [key]: items } as any,
-            materialsMap
-          )[key];
-        }
-      }
+    let weaponData: Weapon;
+    try {
+      weaponData = JSON.parse(weapon.data);
+    } catch (e) {
+      console.error(`Failed to parse weapon data:`, e);
+      return res.status(500).json({ error: 'Invalid weapon data' });
     }
 
-    const result: WeaponResolved = {
+    // Resolve costs
+    const resolved: WeaponResolved = {
       ...weaponData,
-      costs: resolvedCosts,
+      costs: resolveCostRecord(weaponData.costs as any, materialsMap),
     };
 
-    res.json(result);
+    res.json(resolved);
   } catch (error) {
     console.error('Error fetching weapon:', error);
     res.status(500).json({ error: 'Failed to fetch weapon' });

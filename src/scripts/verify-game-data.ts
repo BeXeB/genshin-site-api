@@ -15,12 +15,6 @@ interface VerificationResult {
   criticalErrors: boolean;
 }
 
-interface CharacterData {
-  profile_data: string;
-  skills_data?: string;
-  constellation_data?: string;
-}
-
 function safeParseJSON(data: string): any {
   try {
     return JSON.parse(data);

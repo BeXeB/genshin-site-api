@@ -107,31 +107,20 @@ export async function syncWeapons(db: Database): Promise<SyncStats> {
           version: fullWeapon.version,
         });
 
-        // Try to insert the weapon
+        // Consolidate weapon data and stats into single JSON `data` column
+        const weaponPayload = {
+          meta: fullWeapon,
+          stats: weaponStats,
+          version: fullWeapon.version || '1.0',
+        };
+
+        // Insert using genshin-db id as the primary key
         const result = await insertIfMissing(
           db,
           'weapons',
           normalizedName,
-          [
-            'normalized_name',
-            'name',
-            'rarity',
-            'weapon_type',
-            'main_stat_type',
-            'base_atk_value',
-            'stats_data',
-            'weapon_data',
-          ],
-          [
-            normalizedName,
-            fullWeapon.name,
-            fullWeapon.rarity,
-            fullWeapon.weaponType || null,
-            fullWeapon.mainStatType || null,
-            fullWeapon.baseAtkValue || null,
-            JSON.stringify(weaponStats),
-            weaponData,
-          ]
+          ['id', 'normalized_name', 'data'],
+          [fullWeapon.id, normalizedName, JSON.stringify(weaponPayload)]
         );
 
         if (result.inserted) {

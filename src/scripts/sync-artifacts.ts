@@ -8,6 +8,7 @@ import {
   commitTransaction,
   rollbackTransaction,
 } from '../utils/data-sync';
+import { ArtifactSet } from '../models';
 
 interface SyncStats {
   inserted: number;
@@ -61,38 +62,51 @@ export async function syncArtifacts(db: Database): Promise<SyncStats> {
 
         const normalizedName = normalizeGameName(fullArtifact.name);
 
-        // Map artifact data from genshin-db format (with numeric string keys like '1pc', '2pc', '4pc')
-        const artifactData = JSON.stringify({
+        // Parse rarity array from genshin-db (e.g., ["3", "4", "5"] -> [3, 4, 5])
+        const rarityList: (1 | 2 | 3 | 4 | 5)[] = fullArtifact.rarity
+          ? fullArtifact.rarity.map((r: string) => parseInt(r, 10) as 1 | 2 | 3 | 4 | 5)
+          : [];
+
+        // Parse artifact piece data and extract relic type, text, and story
+        const parsePiece = (piece: any, type: string) => {
+          if (!piece) return undefined;
+          return {
+            name: piece.name,
+            relicType: type as any,
+            relicText: piece.relicText || piece.name || '',
+            description: piece.description || '',
+            story: piece.story || '',
+          };
+        };
+
+        // Map artifact data from genshin-db format to ArtifactSet format
+        const artifactData: ArtifactSet = {
+          id: fullArtifact.id,
           name: fullArtifact.name,
-          rarity: fullArtifact.rarity,
-          '1pc': fullArtifact['1pc'],
-          '2pc': fullArtifact['2pc'],
-          '4pc': fullArtifact['4pc'],
-          flower: fullArtifact.flower,
-          plume: fullArtifact.plume,
-          sands: fullArtifact.sands,
-          goblet: fullArtifact.goblet,
-          circlet: fullArtifact.circlet,
-          images: fullArtifact.images,
-          version: fullArtifact.version,
-        });
+          normalizedName,
+          rarityList,
+          effect1Pc: fullArtifact['1pc'],
+          effect2Pc: fullArtifact['2pc'],
+          effect4Pc: fullArtifact['4pc'],
+          flower: parsePiece(fullArtifact.flower, 'flower'),
+          plume: parsePiece(fullArtifact.plume, 'plume'),
+          sands: parsePiece(fullArtifact.sands, 'sands'),
+          goblet: parsePiece(fullArtifact.goblet, 'goblet'),
+          circlet: parsePiece(fullArtifact.circlet, 'circlet'),
+          images: fullArtifact.images || {},
+          version: fullArtifact.version || '1.0',
+        };
 
-        // Get highest rarity from rarity array
-        const maxRarity = fullArtifact.rarity && fullArtifact.rarity.length > 0
-          ? Math.max(...fullArtifact.rarity.map((r: string) => parseInt(r, 10)))
-          : null;
-
-        // Try to insert the artifact
+        // Try to insert the artifact using genshin-db id as the primary key
         const result = await insertIfMissing(
           db,
           'artifacts',
           normalizedName,
-          ['normalized_name', 'name', 'rarity', 'artifact_data'],
+          ['id', 'normalized_name', 'data'],
           [
+            fullArtifact.id,
             normalizedName,
-            fullArtifact.name,
-            maxRarity,
-            artifactData,
+            JSON.stringify(artifactData),
           ]
         );
 

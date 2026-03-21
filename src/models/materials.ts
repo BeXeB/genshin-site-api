@@ -1,30 +1,43 @@
 import { MaterialType } from './enums';
 import { Item, ResolvedItem } from './items';
 
-export type MaterialCraft = {
-  cost: number;
-  resultCount: number;
-  recipe: Item[];
-};
-
 export type Material = {
   id: number;
   name: string;
   normalizedName: string;
-  type: MaterialType;
-  rarity: number;
+
+  rarity?: 1 | 2 | 3 | 4 | 5;
+  sortRank: number;
   description: string;
-  location: string;
-  farmable: string[];
-  craft?: MaterialCraft;
+
+  type: MaterialType;
+  typeText: string;
+
+  dropDomainName?: string;
+  daysOfWeek?: string[];
+
   images: {
     filename_icon: string;
   };
-  version: string;
 };
 
-export type MaterialResolved = Omit<Material, 'craft'> & {
-  craft?: Omit<MaterialCraft, 'recipe'> & {
+export type MaterialCraft = {
+  id: number;
+  materialId: number;
+  resultCount: number;
+  moraCost: number;
+  recipe: Item[];
+};
+
+export type MaterialResolved = Material & {
+  craftable?: boolean;
+  craft?: {
     recipe: ResolvedItem[];
+    moraCost: number;
+    resultCount: number;
   };
+};
+
+export type MaterialCraftResolved = Omit<MaterialCraft, 'recipe'> & {
+  recipe: ResolvedItem[];
 };

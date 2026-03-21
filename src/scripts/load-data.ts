@@ -3,6 +3,7 @@ import path from 'path';
 import { open } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import dotenv from 'dotenv';
+import { Character } from '../models';
 
 dotenv.config();
 
@@ -14,20 +15,10 @@ async function createTables(db: any) {
     await db.exec(`
       CREATE TABLE characters (
         id INTEGER PRIMARY KEY,
-        normalized_name TEXT NOT NULL,
-        name TEXT NOT NULL,
-        rarity INTEGER,
-        element_type TEXT,
-        weapon_type TEXT,
-        region TEXT,
-        affiliation TEXT,
-        is_traveler INTEGER DEFAULT 0,
-        profile_data JSON NOT NULL,
-        skills_data JSON,
-        stats_data JSON,
-        constellation_data JSON,
-        variants_data JSON,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        normalized_name TEXT NOT NULL UNIQUE,
+        data JSON NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('   ✓ Characters table created');
@@ -35,15 +26,10 @@ async function createTables(db: any) {
     await db.exec(`
       CREATE TABLE weapons (
         id INTEGER PRIMARY KEY,
-        normalized_name TEXT NOT NULL,
-        name TEXT NOT NULL,
-        rarity INTEGER,
-        weapon_type TEXT,
-        main_stat_type TEXT,
-        base_atk_value REAL,
-        stats_data JSON NOT NULL,
-        weapon_data JSON NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        normalized_name TEXT NOT NULL UNIQUE,
+        data JSON NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('   ✓ Weapons table created');
@@ -51,11 +37,10 @@ async function createTables(db: any) {
     await db.exec(`
       CREATE TABLE artifacts (
         id INTEGER PRIMARY KEY,
-        normalized_name TEXT NOT NULL,
-        name TEXT NOT NULL,
-        rarity INTEGER,
-        artifact_data JSON NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        normalized_name TEXT NOT NULL UNIQUE,
+        data JSON NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('   ✓ Artifacts table created');
@@ -63,16 +48,25 @@ async function createTables(db: any) {
     await db.exec(`
       CREATE TABLE materials (
         id INTEGER PRIMARY KEY,
-        normalized_name TEXT NOT NULL,
-        name TEXT NOT NULL,
-        type TEXT,
-        rarity INTEGER,
-        farmable TEXT,
-        material_data JSON NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        normalized_name TEXT NOT NULL UNIQUE,
+        data JSON NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('   ✓ Materials table created');
+
+    await db.exec(`
+      CREATE TABLE material_craft (
+        id INTEGER PRIMARY KEY,
+        material_id INTEGER NOT NULL UNIQUE,
+        data JSON NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(material_id) REFERENCES materials(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('   ✓ Material craft table created');
 
     await db.exec(`
       CREATE TABLE guides (
@@ -91,19 +85,7 @@ async function createTables(db: any) {
       CREATE TABLE brief_descriptions (
         character_id INTEGER NOT NULL,
         element_type TEXT,
-        combat1 TEXT,
-        combat2 TEXT,
-        combat3 TEXT,
-        passive1 TEXT,
-        passive2 TEXT,
-        passive3 TEXT,
-        passive4 TEXT,
-        c1 TEXT,
-        c2 TEXT,
-        c3 TEXT,
-        c4 TEXT,
-        c5 TEXT,
-        c6 TEXT,
+        data JSON NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (character_id, element_type),
@@ -163,39 +145,18 @@ async function loadDataFromJSON() {
       let count = 0;
       for (const file of files) {
         try {
-          const characterData = JSON.parse(fs.readFileSync(path.join(charactersDir, file), 'utf-8'));
-          const id = file.replace('.json', '');
-          const normalizedName = id;
-          
-          // Extract primary key from profile
-          const profileId = characterData.profile?.id || id;
-          const name = characterData.profile?.name || id;
-          const rarity = characterData.profile?.rarity || null;
-          const elementType = characterData.profile?.elementType || null;
-          const weaponType = characterData.profile?.weaponType || null;
-          const region = characterData.profile?.region || null;
-          const affiliation = characterData.profile?.affiliation || null;
-          const isTraveler = characterData.profile?.isTraveler ? 1 : 0;
+          const characterData: Character = JSON.parse(fs.readFileSync(path.join(charactersDir, file), 'utf-8'));
+          const id = characterData.profile.id;
+          const normalizedName = characterData.profile.normalizedName || file.replace('.json', '');
           
           await db.run(
             `INSERT OR REPLACE INTO characters 
-            (id, normalized_name, name, rarity, element_type, weapon_type, region, affiliation, is_traveler, profile_data, skills_data, stats_data, constellation_data, variants_data) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, normalized_name, data) 
+            VALUES (?, ?, ?)`,
             [
-              profileId,
+              id,
               normalizedName,
-              name,
-              rarity,
-              elementType,
-              weaponType,
-              region,
-              affiliation,
-              isTraveler,
-              JSON.stringify(characterData.profile || {}),
-              JSON.stringify(characterData.skills || null),
-              JSON.stringify(characterData.stats || {}),
-              JSON.stringify(characterData.constellation || null),
-              JSON.stringify(characterData.variants || null),
+              JSON.stringify(characterData),
             ]
           );
           count++;
@@ -219,25 +180,14 @@ async function loadDataFromJSON() {
           const weaponData = JSON.parse(fs.readFileSync(path.join(weaponsDir, file), 'utf-8'));
           const id = weaponData.id || file.replace('.json', '');
           const normalizedName = weaponData.normalizedName || file.replace('.json', '');
-          const name = weaponData.name || id;
-          const rarity = weaponData.rarity || null;
-          const weaponType = weaponData.weaponType || null;
-          const mainStatType = weaponData.mainStatType || null;
-          const baseAtkValue = weaponData.baseAtkValue || null;
           
           await db.run(
             `INSERT OR REPLACE INTO weapons 
-            (id, normalized_name, name, rarity, weapon_type, main_stat_type, base_atk_value, stats_data, weapon_data) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, normalized_name, data) 
+            VALUES (?, ?, ?)`,
             [
               id,
               normalizedName,
-              name,
-              rarity,
-              weaponType,
-              mainStatType,
-              baseAtkValue,
-              JSON.stringify(weaponData.stats || {}),
               JSON.stringify(weaponData),
             ]
           );
@@ -260,20 +210,16 @@ async function loadDataFromJSON() {
       for (const file of files) {
         try {
           const artifactData = JSON.parse(fs.readFileSync(path.join(artifactsDir, file), 'utf-8'));
-          const id = artifactData.id || file.replace('.json', '');
+          const id = artifactData.id;
           const normalizedName = artifactData.normalizedName || file.replace('.json', '');
-          const name = artifactData.name || id;
-          const rarity = artifactData.rarity || null;
           
           await db.run(
             `INSERT OR REPLACE INTO artifacts 
-            (id, normalized_name, name, rarity, artifact_data) 
-            VALUES (?, ?, ?, ?, ?)`,
+            (id, normalized_name, data) 
+            VALUES (?, ?, ?)`,
             [
               id,
               normalizedName,
-              name,
-              rarity,
               JSON.stringify(artifactData),
             ]
           );
@@ -313,24 +259,16 @@ async function loadDataFromJSON() {
             const materialsArray = Array.isArray(fileData) ? fileData : [fileData];
             
             for (const materialData of materialsArray) {
-              const id = materialData.id || file.replace('.json', '');
+              const id = materialData.id;
               const normalizedName = materialData.normalizedName || file.replace('.json', '');
-              const name = materialData.name || id;
-              const type = materialData.type || subdir;
-              const rarity = materialData.rarity || null;
-              const farmable = Array.isArray(materialData.farmable) ? materialData.farmable.join(',') : null;
               
               await db.run(
                 `INSERT OR REPLACE INTO materials 
-                (id, normalized_name, name, type, rarity, farmable, material_data) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                (id, normalized_name, data) 
+                VALUES (?, ?, ?)`,
                 [
                   id,
                   normalizedName,
-                  name,
-                  type,
-                  rarity,
-                  farmable,
                   JSON.stringify(materialData),
                 ]
               );
@@ -370,27 +308,14 @@ async function loadDataFromJSON() {
             if (isVariantGrouped) {
               // Load variant-specific brief descriptions
               for (const [elementType, briefContent] of Object.entries(briefData)) {
-                const content = briefContent as any;
                 await db.run(
                   `INSERT OR REPLACE INTO brief_descriptions 
-                  (character_id, element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  (character_id, element_type, data) 
+                  VALUES (?, ?, ?)`,
                   [
                     char.id,
                     elementType,
-                    content.combat1 || null,
-                    content.combat2 || null,
-                    content.combat3 || null,
-                    content.passive1 || null,
-                    content.passive2 || null,
-                    content.passive3 || null,
-                    content.passive4 || null,
-                    content.c1 || null,
-                    content.c2 || null,
-                    content.c3 || null,
-                    content.c4 || null,
-                    content.c5 || null,
-                    content.c6 || null,
+                    JSON.stringify(briefContent),
                   ]
                 );
                 count++;
@@ -399,24 +324,12 @@ async function loadDataFromJSON() {
               // Load flat brief descriptions
               await db.run(
                 `INSERT OR REPLACE INTO brief_descriptions 
-                (character_id, element_type, combat1, combat2, combat3, passive1, passive2, passive3, passive4, c1, c2, c3, c4, c5, c6) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                (character_id, element_type, data) 
+                VALUES (?, ?, ?)`,
                 [
                   char.id,
                   null,
-                  briefData.combat1 || null,
-                  briefData.combat2 || null,
-                  briefData.combat3 || null,
-                  briefData.passive1 || null,
-                  briefData.passive2 || null,
-                  briefData.passive3 || null,
-                  briefData.passive4 || null,
-                  briefData.c1 || null,
-                  briefData.c2 || null,
-                  briefData.c3 || null,
-                  briefData.c4 || null,
-                  briefData.c5 || null,
-                  briefData.c6 || null,
+                  JSON.stringify(briefData),
                 ]
               );
               count++;

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Artifact } from '../models';
+import { ArtifactSet } from '../models';
 
 const router = Router();
 
@@ -7,26 +7,20 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
-    const { rarity } = req.query;
 
-    let query = `
-      SELECT artifact_data
-      FROM artifacts
-    `;
-    const params: any[] = [];
+    const artifacts = await db.all(
+      `SELECT id, normalized_name, data FROM artifacts ORDER BY normalized_name`
+    );
 
-    if (rarity) {
-      query += ' WHERE rarity = ?';
-      params.push(parseInt(rarity as string));
-    }
-
-    const artifacts = await db.all(query, params);
-    
-    // Parse artifact_data and return full ArtifactSet objects
-    const parsed = artifacts.map((a: any) => {
-      const artifactData = JSON.parse(a.artifact_data);
-      return artifactData;
-    });
+    const parsed = artifacts
+      .map((art: any) => {
+        try {
+          return JSON.parse(art.data) as ArtifactSet;
+        } catch (e: any) {
+          return null;
+        }
+      })
+      .filter((art: any): art is ArtifactSet => art !== null);
 
     res.json(parsed);
   } catch (error) {
@@ -41,8 +35,9 @@ router.get('/:id', async (req: Request, res: Response) => {
     const db = req.app.locals.db;
     const { id } = req.params;
 
+
     const artifact: any = await db.get(
-      `SELECT artifact_data FROM artifacts WHERE id = ? OR normalized_name = ?`,
+      `SELECT id, normalized_name, data FROM artifacts WHERE id = ? OR normalized_name = ?`,
       [isNaN(Number(id)) ? null : Number(id), id]
     );
 
@@ -50,8 +45,15 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Artifact not found' });
     }
 
-    const result: Artifact = JSON.parse(artifact.artifact_data);
-    res.json(result);
+    let artifactData: ArtifactSet;
+    try {
+      artifactData = JSON.parse(artifact.data);
+    } catch (e) {
+      console.error(`Failed to parse artifact data:`, e);
+      return res.status(500).json({ error: 'Invalid artifact data' });
+    }
+
+    res.json(artifactData);
   } catch (error) {
     console.error('Error fetching artifact:', error);
     res.status(500).json({ error: 'Failed to fetch artifact' });

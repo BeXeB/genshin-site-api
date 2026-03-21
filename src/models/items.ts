@@ -12,7 +12,7 @@ export type ResolvedItem = {
   craftable?: boolean;
   craft?: {
     recipe: ResolvedItem[];
-    cost: number;
+    moraCost: number;
     resultCount: number;
   };
 };

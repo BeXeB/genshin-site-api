@@ -2,31 +2,31 @@ import { ArtifactType } from './enums';
 
 export type ArtifactPiece = {
   name: string;
+  relicType: ArtifactType;
+  relicText: string;
   description: string;
-  images: {
-    filename_icon: string;
-  };
+  story: string;
 };
 
-export type Artifact = {
+export type ArtifactSet = {
   id: number;
   name: string;
   normalizedName: string;
-  rarity: number;
-  description: string;
-  effect2pc: string;
-  effect4pc: string;
-  flower: ArtifactPiece;
-  plume: ArtifactPiece;
-  sands: ArtifactPiece;
-  goblet: ArtifactPiece;
-  circlet: ArtifactPiece;
+  rarityList: (1 | 2 | 3 | 4 | 5)[];
+  effect1Pc?: string;
+  effect2Pc?: string;
+  effect4Pc?: string;
+  flower?: ArtifactPiece;
+  plume?: ArtifactPiece;
+  sands?: ArtifactPiece;
+  goblet?: ArtifactPiece;
+  circlet?: ArtifactPiece;
   images: {
-    filename_flower: string;
-    filename_plume: string;
-    filename_sands: string;
-    filename_goblet: string;
-    filename_circlet: string;
+    filename_flower?: string;
+    filename_plume?: string;
+    filename_sands?: string;
+    filename_goblet?: string;
+    filename_circlet?: string;
   };
   version: string;
 };

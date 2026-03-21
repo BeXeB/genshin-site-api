@@ -110,37 +110,22 @@ export async function syncCharacters(db: Database): Promise<SyncStats> {
           version: fullCharacter.version,
         });
 
-        // Try to insert the character
+        // Consolidate full character data into single JSON `data` column
+        const characterPayload = {
+          profile: fullCharacter,
+          talents: talentsData ? JSON.parse(talentsData) : null,
+          constellations: constellationData ? JSON.parse(constellationData) : null,
+          profileData: JSON.parse(profileData),
+          isTraveler: normalizedName.includes('traveler') || normalizedName.includes('aether') || normalizedName.includes('lumine'),
+        };
+
+        // Insert using genshin-db id as the primary key
         const result = await insertIfMissing(
           db,
           'characters',
           normalizedName,
-          [
-            'normalized_name',
-            'name',
-            'rarity',
-            'element_type',
-            'weapon_type',
-            'region',
-            'affiliation',
-            'is_traveler',
-            'profile_data',
-            'skills_data',
-            'constellation_data',
-          ],
-          [
-            normalizedName,
-            fullCharacter.name,
-            fullCharacter.rarity,
-            fullCharacter.elementType || null,
-            fullCharacter.weaponType || null,
-            fullCharacter.region || null,
-            fullCharacter.affiliation || null,
-            normalizedName.includes('traveler') || normalizedName.includes('aether') || normalizedName.includes('lumine') ? 1 : 0,
-            profileData,
-            talentsData,
-            constellationData,
-          ]
+          ['id', 'normalized_name', 'data'],
+          [fullCharacter.id, normalizedName, JSON.stringify(characterPayload)]
         );
 
         if (result.inserted) {

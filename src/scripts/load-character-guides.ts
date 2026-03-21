@@ -32,8 +32,8 @@ async function loadCharacterGuides() {
     }
 
     for (const file of files) {
-      const apiKey = file.replace('.json', '').replace('.md', '');
-      const slug = `characters/${apiKey}`;
+      const normalizedName = file.replace('.json', '').replace('.md', '');
+      const slug = `characters/${normalizedName}`;
       const filePath = path.join(characterGuidesDir, file);
 
       console.log(`Loading guide: ${slug}`);
@@ -47,14 +47,6 @@ async function loadCharacterGuides() {
       try {
         const content = fs.readFileSync(filePath, 'utf-8');
 
-        // Look up character by apiKey to get its name
-        const character = await db.get(
-          'SELECT name FROM characters WHERE normalized_name = ?',
-          [apiKey]
-        );
-
-        const characterName = character?.name || apiKey;
-
         // Check if guide already exists
         const existing = await db.get('SELECT slug FROM guides WHERE slug = ?', [slug]);
 
@@ -64,7 +56,7 @@ async function loadCharacterGuides() {
             `UPDATE guides 
              SET name = ?, content = ?, updated_at = CURRENT_TIMESTAMP
              WHERE slug = ?`,
-            [characterName, content, slug]
+            [normalizedName, content, slug]
           );
           console.log(`  ✓ Updated guide: ${slug}`);
         } else {
@@ -72,7 +64,7 @@ async function loadCharacterGuides() {
           await db.run(
             `INSERT INTO guides (slug, name, description, content)
              VALUES (?, ?, ?, ?)`,
-            [slug, characterName, '', content]
+            [slug, normalizedName, '', content]
           );
           console.log(`  ✓ Created guide: ${slug}`);
         }

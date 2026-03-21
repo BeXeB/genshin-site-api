@@ -18,14 +18,30 @@ export async function loadMaterialsMap(db: any): Promise<Map<number, Material>> 
   }
 
   const materialRows = await db.all(
-    'SELECT id, material_data FROM materials ORDER BY id'
+    'SELECT id, data FROM materials ORDER BY id'
   );
 
   const map = new Map<number, Material>();
 
   for (const row of materialRows) {
     try {
-      const material = JSON.parse(row.material_data) as Material;
+      const material = JSON.parse(row.data) as Material;
+      
+      // Also load craft data if it exists
+      const craftRow = await db.get(
+        'SELECT data FROM material_craft WHERE material_id = ?',
+        [row.id]
+      );
+
+      if (craftRow) {
+        const craftData = JSON.parse(craftRow.data);
+        (material as any).craft = {
+          recipe: craftData.recipe,
+          moraCost: craftData.moraCost,
+          resultCount: craftData.resultCount,
+        };
+      }
+
       map.set(material.id, material);
     } catch (error) {
       console.error(`Failed to parse material data for id ${row.id}:`, error);
@@ -89,15 +105,16 @@ export function resolveItem(
   const resolved: ResolvedItem = {
     material,
     count: item.count,
-    craftable: !!material.craft,
+    craftable: !!(material as any).craft,
   };
 
   // Recursively resolve craft recipe if material is craftable
-  if (material.craft) {
+  const materialWithCraft = material as any;
+  if (materialWithCraft.craft) {
     resolved.craft = {
-      cost: material.craft.cost,
-      resultCount: material.craft.resultCount,
-      recipe: material.craft.recipe.map((recipeItem) =>
+      moraCost: materialWithCraft.craft.moraCost,
+      resultCount: materialWithCraft.craft.resultCount,
+      recipe: materialWithCraft.craft.recipe.map((recipeItem: Item) =>
         resolveItem(recipeItem, materialsMap, depthLimit, currentDepth + 1)
       ),
     };

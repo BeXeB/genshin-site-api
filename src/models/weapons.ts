@@ -12,7 +12,7 @@ export type Weapon = {
   rarity: 1 | 2 | 3 | 4 | 5;
   story: string;
   baseAtkValue: number;
-  mainStatType: StatType;
+  mainStatType?: StatType;
   mainStatText?: string;
   baseStatText?: string;
   effectName?: string;

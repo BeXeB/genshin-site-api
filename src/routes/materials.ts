@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { Material, MaterialResolved } from '../models';
-import { resolveItems } from '../utils/resolver';
+import { Material, MaterialResolved, MaterialCraft } from '../models';
+import { ResolvedItem } from '../models/items';
+import { resolveCostRecord } from '../utils/resolver';
 
 const router = Router();
 
@@ -8,28 +9,30 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
-    const { type } = req.query;
+    const { type, rarity } = req.query;
 
-    let query = `
-      SELECT id, normalized_name, name, type, rarity
-      FROM materials
-    `;
-    const params: any[] = [];
+    const materials = await db.all(
+      `SELECT id, normalized_name, data FROM materials ORDER BY normalized_name`
+    );
+
+    // Parse and filter
+    let parsed = materials
+      .map((mat: any) => {
+        try {
+          return JSON.parse(mat.data) as Material;
+        } catch (e: any) {
+          return null;
+        }
+      })
+      .filter((mat: any): mat is Material => mat !== null);
 
     if (type) {
-      query += ' WHERE type = ?';
-      params.push(type);
+      parsed = parsed.filter((mat: Material) => mat.type === type);
+    }
+    if (rarity) {
+      parsed = parsed.filter((mat: Material) => mat.rarity === parseInt(rarity as string));
     }
 
-    const materials = await db.all(query, params);
-    
-    const parsed = materials.map((m: any) => ({
-      id: m.id,
-      name: m.name,
-      normalizedName: m.normalized_name,
-      type: m.type,
-      rarity: m.rarity,
-    }));
 
     res.json(parsed);
   } catch (error) {
@@ -38,7 +41,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/materials/:id - Get material details (fully resolved)
+// GET /api/materials/:id - Get material details with craft data
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
@@ -46,7 +49,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
 
     const material: any = await db.get(
-      `SELECT material_data FROM materials WHERE id = ? OR normalized_name = ?`,
+      `SELECT id, normalized_name, data FROM materials WHERE id = ? OR normalized_name = ?`,
       [isNaN(Number(id)) ? null : Number(id), id]
     );
 
@@ -54,22 +57,46 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Material not found' });
     }
 
-    const materialData = JSON.parse(material.material_data) as Material;
-
-    // Resolve craft recipe items if material is craftable
-    let result: MaterialResolved = {
-      ...materialData,
-    } as MaterialResolved;
-
-    if (materialData.craft) {
-      result.craft = {
-        cost: materialData.craft.cost,
-        resultCount: materialData.craft.resultCount,
-        recipe: resolveItems(materialData.craft.recipe, materialsMap),
-      };
+    let materialData: Material;
+    try {
+      materialData = JSON.parse(material.data);
+    } catch (e) {
+      console.error(`Failed to parse material data:`, e);
+      return res.status(500).json({ error: 'Invalid material data' });
     }
 
-    res.json(result);
+    // Try to find craft data if available
+    const craftRow: any = await db.get(
+      `SELECT data FROM material_craft WHERE material_id = ?`,
+      [materialData.id]
+    );
+
+    const resolved: MaterialResolved = {
+      ...materialData,
+      craftable: !!craftRow,
+    };
+
+    if (craftRow) {
+      try {
+        const craftData = JSON.parse(craftRow.data) as MaterialCraft;
+        // Convert recipe array to map format for resolver
+        const recipeMap = craftData.recipe.reduce((map: Record<string, any[]>, item: any) => {
+          map[String(item.id)] = [item];
+          return map;
+        }, {});
+        const recipeValues = Object.values(resolveCostRecord(recipeMap, materialsMap));
+        const resolvedRecipeItems = recipeValues.flat().filter((item: any): item is ResolvedItem => !!item);
+        resolved.craft = {
+          recipe: resolvedRecipeItems,
+          moraCost: craftData.moraCost,
+          resultCount: craftData.resultCount,
+        };
+      } catch (e: any) {
+        console.error(`Failed to parse craft data for material ${materialData.id}:`, e);
+      }
+    }
+
+    res.json(resolved);
   } catch (error) {
     console.error('Error fetching material:', error);
     res.status(500).json({ error: 'Failed to fetch material' });

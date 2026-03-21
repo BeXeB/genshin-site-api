@@ -126,28 +126,58 @@ export async function syncMaterials(db: Database): Promise<SyncStats> {
           images: fullMaterial.images,
         });
 
-        // Try to insert the material with genshin-db ID
-        const genshinDbId = fullMaterial.id;
+        // Consolidate material data into single JSON `data` column
+        const materialPayload = {
+          meta: fullMaterial,
+          categoryType: materialType,
+          data: JSON.parse(materialData),
+        };
+
+        // Insert using genshin-db id as the primary key
         const result = await insertIfMissing(
           db,
           'materials',
           normalizedName,
-          ['id', 'normalized_name', 'name', 'type', 'rarity', 'farmable', 'material_data'],
-          [
-            genshinDbId,
-            normalizedName,
-            fullMaterial.name,
-            materialType,
-            fullMaterial.rarity ? parseInt(fullMaterial.rarity.toString(), 10) : null,
-            fullMaterial.dropDomainId ? 1 : 0,
-            materialData,
-          ]
+          ['id', 'normalized_name', 'data'],
+          [fullMaterial.id, normalizedName, JSON.stringify(materialPayload)]
         );
 
         if (result.inserted) {
           stats.inserted++;
         } else {
           stats.skipped++;
+        }
+
+        // Also check for craft data and insert it separately
+        try {
+          const craftData: genshindb.Craft | undefined = genshindb.crafts(materialName, {
+            queryLanguages: [queryLanguage],
+          });
+
+            if (craftData && craftData.recipe && craftData.recipe.length > 0) {
+            // Map craft recipe items
+            const recipeItems = craftData.recipe.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              count: r.count,
+            }));
+
+            const craftPayload = {
+              recipe: recipeItems,
+              moraCost: craftData.moraCost || 0,
+              resultCount: craftData.resultCount || 1,
+            };
+
+            // Insert or replace craft data into simplified material_craft schema
+            await db.run(
+              `INSERT OR REPLACE INTO material_craft (id, material_id, data)
+               VALUES (?, ?, ?)`,
+              [fullMaterial.id, fullMaterial.id, JSON.stringify(craftPayload)]
+            );
+          }
+        } catch (craftError) {
+          // Craft data is optional, don't fail if it doesn't exist
+          console.debug(`No craft data for material ${materialName}`);
         }
       } catch (error) {
         console.error(`Error syncing material ${materialName}: ${error}`);

@@ -22,6 +22,9 @@ app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static images
+app.use('/images', express.static(path.join(__dirname, '../public/images')));
+
 // Initialize database on startup
 let db: any;
 

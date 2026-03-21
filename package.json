@@ -8,7 +8,10 @@
     "dev": "ts-node src/server.ts",
     "build": "tsc",
     "test": "jest",
-    "migrate": "ts-node src/scripts/migrate.ts"
+    "migrate": "ts-node src/scripts/migrate.ts",
+    "load:data": "ts-node src/scripts/load-data.ts",
+    "load:guides": "ts-node src/scripts/load-guides.ts",
+    "load:character-guides": "ts-node src/scripts/load-character-guides.ts"
   },
   "keywords": [
     "genshin",

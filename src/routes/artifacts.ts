@@ -10,7 +10,7 @@ router.get('/', async (req: Request, res: Response) => {
     const { rarity } = req.query;
 
     let query = `
-      SELECT id, normalized_name, name, rarity
+      SELECT artifact_data
       FROM artifacts
     `;
     const params: any[] = [];
@@ -22,12 +22,11 @@ router.get('/', async (req: Request, res: Response) => {
 
     const artifacts = await db.all(query, params);
     
-    const parsed = artifacts.map((a: any) => ({
-      id: a.id,
-      name: a.name,
-      normalizedName: a.normalized_name,
-      rarity: a.rarity,
-    }));
+    // Parse artifact_data and return full ArtifactSet objects
+    const parsed = artifacts.map((a: any) => {
+      const artifactData = JSON.parse(a.artifact_data);
+      return artifactData;
+    });
 
     res.json(parsed);
   } catch (error) {

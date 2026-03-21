@@ -93,10 +93,10 @@ async function createTables(db: Database): Promise<void> {
   // Guides table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS guides (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      author TEXT,
-      description TEXT,
+      slug TEXT PRIMARY KEY,
+      name TEXT,
+      description TEXT NOT NULL,
+      imageUrl TEXT,
       content TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

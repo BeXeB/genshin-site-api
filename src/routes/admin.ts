@@ -83,61 +83,61 @@ router.delete('/characters/:id', async (req: Request, res: Response) => {
 router.post('/guides', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
-    const { id, title, author, description, content } = req.body;
+    const { slug, name, description, content, imageUrl } = req.body;
 
-    if (!id || !title) {
-      return res.status(400).json({ error: 'Missing required fields: id, title' });
+    if (!slug || !description) {
+      return res.status(400).json({ error: 'Missing required fields: slug, description' });
     }
 
     await db.run(
-      'INSERT INTO guides (id, title, author, description, content) VALUES (?, ?, ?, ?, ?)',
-      [id, title, author || null, description || null, content || '']
+      'INSERT INTO guides (slug, name, description, content, imageUrl) VALUES (?, ?, ?, ?, ?)',
+      [slug, name || null, description, content || '', imageUrl || null]
     );
 
-    res.status(201).json({ id, title, message: 'Guide created' });
+    res.status(201).json({ slug, message: 'Guide created' });
   } catch (error) {
     console.error('Error creating guide:', error);
     res.status(500).json({ error: 'Failed to create guide' });
   }
 });
 
-// PUT /admin/guides/:id - Update guide
-router.put('/guides/:id', async (req: Request, res: Response) => {
+// PUT /admin/guides/:slug - Update guide
+router.put('/guides/:slug', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
-    const { id } = req.params;
-    const { title, author, description, content } = req.body;
+    const { slug } = req.params;
+    const { name, description, content, imageUrl } = req.body;
 
-    const guide = await db.get('SELECT * FROM guides WHERE id = ?', [id]);
+    const guide = await db.get('SELECT * FROM guides WHERE slug = ?', [slug]);
     if (!guide) {
       return res.status(404).json({ error: 'Guide not found' });
     }
 
     await db.run(
-      'UPDATE guides SET title = ?, author = ?, description = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [title || guide.title, author || guide.author, description || guide.description, content || guide.content, id]
+      'UPDATE guides SET name = ?, description = ?, content = ?, imageUrl = ?, updated_at = CURRENT_TIMESTAMP WHERE slug = ?',
+      [name || guide.name, description || guide.description, content || guide.content, imageUrl || guide.imageUrl, slug]
     );
 
-    res.json({ id, message: 'Guide updated' });
+    res.json({ slug, message: 'Guide updated' });
   } catch (error) {
     console.error('Error updating guide:', error);
     res.status(500).json({ error: 'Failed to update guide' });
   }
 });
 
-// DELETE /admin/guides/:id - Delete guide
-router.delete('/guides/:id', async (req: Request, res: Response) => {
+// DELETE /admin/guides/:slug - Delete guide
+router.delete('/guides/:slug', async (req: Request, res: Response) => {
   try {
     const db = req.app.locals.db;
-    const { id } = req.params;
+    const { slug } = req.params;
 
-    const result = await db.run('DELETE FROM guides WHERE id = ?', [id]);
+    const result = await db.run('DELETE FROM guides WHERE slug = ?', [slug]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Guide not found' });
     }
 
-    res.json({ id, message: 'Guide deleted' });
+    res.json({ slug, message: 'Guide deleted' });
   } catch (error) {
     console.error('Error deleting guide:', error);
     res.status(500).json({ error: 'Failed to delete guide' });

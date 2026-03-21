@@ -11,7 +11,7 @@ router.get('/', async (req: Request, res: Response) => {
     const { type, rarity } = req.query;
 
     let query = `
-      SELECT id, normalized_name, name, rarity, weapon_type, main_stat_type, base_atk_value
+      SELECT weapon_data
       FROM weapons
     `;
     const params: any[] = [];
@@ -32,15 +32,11 @@ router.get('/', async (req: Request, res: Response) => {
 
     const weapons = await db.all(query, params);
     
-    // Return summary format
-    const parsed = weapons.map((w: any) => ({
-      id: w.id,
-      name: w.name,
-      normalizedName: w.normalized_name,
-      rarity: w.rarity,
-      weaponType: w.weapon_type,
-      mainStatType: w.main_stat_type,
-    }));
+    // Parse weapon_data and return full Weapon objects
+    const parsed = weapons.map((w: any) => {
+      const weaponData = JSON.parse(w.weapon_data);
+      return weaponData;
+    });
 
     res.json(parsed);
   } catch (error) {

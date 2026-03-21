@@ -13,7 +13,7 @@ router.get('/', async (req: Request, res: Response) => {
     let query = `
       SELECT 
         id, normalized_name, name, rarity, element_type, weapon_type, region, affiliation,
-        profile_data, skills_data, stats_data, constellation_data, variants_data
+        profile_data
       FROM characters
     `;
     const params: any[] = [];
@@ -38,17 +38,11 @@ router.get('/', async (req: Request, res: Response) => {
 
     const characters = await db.all(query, params);
     
-    // Parse JSON fields
-    const parsed = characters.map((char: any) => ({
-      id: char.id,
-      name: char.name,
-      normalizedName: char.normalized_name,
-      rarity: char.rarity,
-      elementType: char.element_type,
-      weaponType: char.weapon_type,
-      region: char.region,
-      affiliation: char.affiliation,
-    }));
+    // Parse profile_data and return full CharacterProfile objects
+    const parsed = characters.map((char: any) => {
+      const profile = JSON.parse(char.profile_data);
+      return profile;
+    });
 
     res.json(parsed);
   } catch (error) {

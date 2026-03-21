@@ -23,6 +23,9 @@ export async function initializeDatabase(): Promise<Database> {
   // Initialize schema if needed
   await createTables(db);
 
+  // Apply migrations to add constraints if needed
+  await applyMigrations(db);
+
   return db;
 }
 
@@ -31,7 +34,7 @@ async function createTables(db: Database): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS characters (
       id INTEGER PRIMARY KEY,
-      normalized_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       rarity INTEGER,
       element_type TEXT,
@@ -52,7 +55,7 @@ async function createTables(db: Database): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS weapons (
       id INTEGER PRIMARY KEY,
-      normalized_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       rarity INTEGER,
       weapon_type TEXT,
@@ -68,7 +71,7 @@ async function createTables(db: Database): Promise<void> {
   await db.exec(`
     CREATE TABLE IF NOT EXISTS artifacts (
       id INTEGER PRIMARY KEY,
-      normalized_name TEXT NOT NULL,
+      normalized_name TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       rarity INTEGER,
       artifact_data JSON NOT NULL,
@@ -79,14 +82,15 @@ async function createTables(db: Database): Promise<void> {
   // Materials table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS materials (
-      id INTEGER PRIMARY KEY,
-      normalized_name TEXT NOT NULL,
+      id INTEGER NOT NULL UNIQUE,
+      normalized_name TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       type TEXT,
       rarity INTEGER,
-      farmable TEXT,
+      farmable INTEGER DEFAULT 0,
       material_data JSON NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (normalized_name)
     )
   `);
 
@@ -128,6 +132,82 @@ async function createTables(db: Database): Promise<void> {
       FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
     )
   `);
+}
+
+async function applyMigrations(db: Database): Promise<void> {
+  // Add UNIQUE constraint to normalized_name if it doesn't exist
+  // We need to check for existing constraints and add them if needed
+
+  const tables = [
+    { name: 'characters', column: 'normalized_name' },
+    { name: 'weapons', column: 'normalized_name' },
+    { name: 'artifacts', column: 'normalized_name' },
+    { name: 'materials', column: 'normalized_name' },
+  ];
+
+  for (const table of tables) {
+    try {
+      // Check if table exists
+      const tableExists = await db.get(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        [table.name]
+      );
+
+      if (!tableExists) {
+        continue;
+      }
+
+      // Check if UNIQUE constraint exists on the column
+      const hasConstraint = await db.get(
+        `SELECT name FROM pragma_index_list('${table.name}') WHERE unique=1 AND origin='u'`
+      );
+
+      if (!hasConstraint) {
+        console.log(`Adding UNIQUE constraint to ${table.name}.${table.column}...`);
+
+        // Create a temporary table with the UNIQUE constraint
+        await db.exec(`BEGIN TRANSACTION`);
+
+        try {
+          // Get the table schema
+          const tableSchema = await db.get(
+            `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`,
+            [table.name]
+          );
+
+          if (!tableSchema) {
+            continue;
+          }
+
+          // Create new table with unique constraint
+          const newTableName = `${table.name}_new`;
+          const createNewTableSQL = tableSchema.sql
+            .replace(new RegExp(`CREATE TABLE ${table.name}`, 'i'), `CREATE TABLE ${newTableName}`)
+            .replace(new RegExp(`normalized_name TEXT NOT NULL`, 'i'), `normalized_name TEXT NOT NULL UNIQUE`);
+
+          await db.exec(createNewTableSQL);
+
+          // Copy data from old table to new table
+          await db.run(
+            `INSERT INTO ${newTableName} SELECT * FROM ${table.name}`
+          );
+
+          // Drop old table and rename new one
+          await db.exec(`DROP TABLE ${table.name}`);
+          await db.exec(`ALTER TABLE ${newTableName} RENAME TO ${table.name}`);
+
+          await db.exec(`COMMIT`);
+          console.log(`Successfully added UNIQUE constraint to ${table.name}.${table.column}`);
+        } catch (error) {
+          await db.exec(`ROLLBACK`);
+          console.error(`Error applying migration to ${table.name}:`, error);
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.warn(`Could not check constraint on ${table.name}: ${error}`);
+    }
+  }
 }
 
 export async function loadDataFromJSON(db: Database): Promise<void> {

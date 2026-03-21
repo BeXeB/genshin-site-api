@@ -11,7 +11,16 @@
     "migrate": "ts-node src/scripts/migrate.ts",
     "load:data": "ts-node src/scripts/load-data.ts",
     "load:guides": "ts-node src/scripts/load-guides.ts",
-    "load:character-guides": "ts-node src/scripts/load-character-guides.ts"
+    "load:character-guides": "ts-node src/scripts/load-character-guides.ts",
+    "sync": "ts-node src/scripts/run-sync.ts",
+    "sync:characters": "ts-node src/scripts/run-sync.ts --type characters",
+    "sync:artifacts": "ts-node src/scripts/run-sync.ts --type artifacts",
+    "sync:materials": "ts-node src/scripts/run-sync.ts --type materials",
+    "sync:weapons": "ts-node src/scripts/run-sync.ts --type weapons",
+    "sync:icons": "ts-node src/scripts/run-sync.ts --type icons",
+    "sync:all": "ts-node src/scripts/run-sync.ts --type all",
+    "verify:data": "ts-node src/scripts/run-sync.ts --type verify",
+    "reset:materials": "ts-node src/scripts/reset-materials.ts"
   },
   "keywords": [
     "genshin",
@@ -22,9 +31,11 @@
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.20.2",
+    "commander": "^11.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "genshin-db": "^5.2.9",
     "sqlite": "^5.0.1",
     "sqlite3": "^5.1.6"
   },

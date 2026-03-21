@@ -93,9 +93,18 @@ export async function syncArtifacts(db: Database): Promise<SyncStats> {
           sands: parsePiece(fullArtifact.sands, 'sands'),
           goblet: parsePiece(fullArtifact.goblet, 'goblet'),
           circlet: parsePiece(fullArtifact.circlet, 'circlet'),
-          images: fullArtifact.images || {},
+          images: {
+            filename_flower: fullArtifact.images?.filename_flower,
+            filename_plume: fullArtifact.images?.filename_plume,
+            filename_sands: fullArtifact.images?.filename_sands,
+            filename_goblet: fullArtifact.images?.filename_goblet,
+            filename_circlet: fullArtifact.images?.filename_circlet,
+          },
           version: fullArtifact.version || '1.0',
         };
+
+
+        // TODO MAKE 100% sure we only have the fields we need
 
         // Try to insert the artifact using genshin-db id as the primary key
         const result = await insertIfMissing(

@@ -1,5 +1,5 @@
-import { Database } from 'sqlite';
-import genshindb from 'genshin-db';
+import { Database } from "sqlite";
+import genshindb from "genshin-db";
 import {
   normalizeGameName,
   insertIfMissing,
@@ -7,7 +7,9 @@ import {
   beginTransaction,
   commitTransaction,
   rollbackTransaction,
-} from '../utils/data-sync';
+} from "../utils/data-sync";
+import { Material } from "../models";
+import { mapMaterialType } from "../utils/data-sync";
 
 interface SyncStats {
   inserted: number;
@@ -29,7 +31,7 @@ function getMaterialNames(category: string): string[] {
   if (!result) return [];
 
   return Array.isArray(result)
-    ? result.filter((x): x is string => typeof x === 'string')
+    ? result.filter((x): x is string => typeof x === "string")
     : [];
 }
 
@@ -49,97 +51,99 @@ export async function syncMaterials(db: Database): Promise<SyncStats> {
   try {
     // Collect material names from specific categories (matching frontend filtering)
     const nations = [
-      'Mondstadt',
-      'Liyue',
-      'Inazuma',
-      'Sumeru',
-      'Fontaine',
-      'Natlan',
-      'Nod-Krai',
+      "Mondstadt",
+      "Liyue",
+      "Inazuma",
+      "Sumeru",
+      "Fontaine",
+      "Natlan",
+      "Nod-Krai",
     ];
 
-    const talentMaterialNames = getMaterialNames('Character Talent Material');
-    const weaponMaterialNames = getMaterialNames('Weapon Ascension Material');
-    const gemstoneNames = getMaterialNames('Character Ascension Material');
-    const genericMaterialNames = getMaterialNames('Character and Weapon Enhancement Material');
-    const bossMaterialNames = getMaterialNames('Character Level-Up Material');
-    const localSpecialtyNames = nations.flatMap((n) =>
-      getMaterialNames(`Local Specialty (${n})`)
+    const talentMaterialNames = getMaterialNames("Character Talent Material");
+    const weaponMaterialNames = getMaterialNames("Weapon Ascension Material");
+    const gemstoneNames = getMaterialNames("Character Ascension Material");
+    const genericMaterialNames = getMaterialNames(
+      "Character and Weapon Enhancement Material",
     );
-    const moraName = getMaterialNames('Common Currency');
-    const charXPNames = getMaterialNames('Character EXP Material');
-    const weaponXPNames = getMaterialNames('Weapon Enhancement Material');
+    const bossMaterialNames = getMaterialNames("Character Level-Up Material");
+    const localSpecialtyNames = nations.flatMap((n) =>
+      getMaterialNames(`Local Specialty (${n})`),
+    );
+    const moraName = getMaterialNames("Common Currency");
+    const charXPNames = getMaterialNames("Character EXP Material");
+    const weaponXPNames = getMaterialNames("Weapon Enhancement Material");
 
     // Combine all material names with their types (matching frontend categorization)
     const materialsWithTypes: Array<{
       name: string;
       type: string;
     }> = [
-      ...talentMaterialNames.map((n) => ({ name: n, type: 'talent' })),
-      ...weaponMaterialNames.map((n) => ({ name: n, type: 'weapon' })),
-      ...gemstoneNames.map((n) => ({ name: n, type: 'gemstone' })),
-      ...genericMaterialNames.map((n) => ({ name: n, type: 'generic' })),
-      ...bossMaterialNames.map((n) => ({ name: n, type: 'boss' })),
-      ...localSpecialtyNames.map((n) => ({ name: n, type: 'local-specialty' })),
-      ...moraName.map((n) => ({ name: n, type: 'xp-and-mora' })),
-      ...charXPNames.map((n) => ({ name: n, type: 'xp-and-mora' })),
-      ...weaponXPNames.map((n) => ({ name: n, type: 'xp-and-mora' })),
+      ...talentMaterialNames.map((n) => ({ name: n, type: "talent" })),
+      ...weaponMaterialNames.map((n) => ({ name: n, type: "weapon" })),
+      ...gemstoneNames.map((n) => ({ name: n, type: "gemstone" })),
+      ...genericMaterialNames.map((n) => ({ name: n, type: "generic" })),
+      ...bossMaterialNames.map((n) => ({ name: n, type: "boss" })),
+      ...localSpecialtyNames.map((n) => ({ name: n, type: "local-specialty" })),
+      ...moraName.map((n) => ({ name: n, type: "xp-and-mora" })),
+      ...charXPNames.map((n) => ({ name: n, type: "xp-and-mora" })),
+      ...weaponXPNames.map((n) => ({ name: n, type: "xp-and-mora" })),
     ];
 
     if (!materialsWithTypes || materialsWithTypes.length === 0) {
-      console.error('No materials found in specified categories');
+      console.error("No materials found in specified categories");
       return stats;
     }
 
     await beginTransaction(db);
 
-    for (const { name: materialName, type: materialType } of materialsWithTypes) {
+    for (const {
+      name: materialName,
+      type: materialType,
+    } of materialsWithTypes) {
       stats.totalProcessed++;
 
       try {
         // Fetch full material data
-        const fullMaterial: genshindb.Material | undefined = genshindb.materials(materialName, {
-          queryLanguages: [queryLanguage],
-        });
+        const fullMaterial: genshindb.Material | undefined =
+          genshindb.materials(materialName, {
+            queryLanguages: [queryLanguage],
+          });
 
         if (!fullMaterial) {
-          console.warn(`Could not fetch full data for material: ${materialName}`);
+          console.warn(
+            `Could not fetch full data for material: ${materialName}`,
+          );
           stats.errors++;
           continue;
         }
 
         const normalizedName = normalizeGameName(fullMaterial.name);
 
-        // Map material data using ACTUAL field names from genshin-db types
-        const materialData = JSON.stringify({
+        // Build a typed material object with only required fields
+        const materialMeta: Material = {
+          id: fullMaterial.id,
           name: fullMaterial.name,
-          dupealias: fullMaterial.dupealias,
-          description: fullMaterial.description,
-          sortRank: fullMaterial.sortRank,
+          normalizedName,
           rarity: fullMaterial.rarity,
-          category: fullMaterial.category,
-          typeText: fullMaterial.typeText,
-          dropDomainId: fullMaterial.dropDomainId,
+          sortRank: fullMaterial.sortRank || 0,
+          description: fullMaterial.description || "",
+          type: mapMaterialType(materialType),
+          typeText: fullMaterial.typeText || materialType || "",
           dropDomainName: fullMaterial.dropDomainName,
           daysOfWeek: fullMaterial.daysOfWeek,
-          source: fullMaterial.source,
-          images: fullMaterial.images,
-        });
-
-        // Consolidate material data into single JSON `data` column
-        const materialPayload = {
-          meta: fullMaterial,
-          categoryType: materialType,
-          data: JSON.parse(materialData),
+          images: {
+            filename_icon: fullMaterial.images?.filename_icon,
+          },
         };
 
         // Insert using genshin-db id as the primary key
         const result = await insertIfMissing(
           db,
-          'materials',
+          "materials",
           normalizedName,
-          ['id', 'normalized_name', 'data'],
-          [fullMaterial.id, normalizedName, JSON.stringify(materialPayload)]
+          ["id", "normalized_name", "data"],
+          [fullMaterial.id, normalizedName, JSON.stringify(materialMeta)],
         );
 
         if (result.inserted) {
@@ -150,11 +154,14 @@ export async function syncMaterials(db: Database): Promise<SyncStats> {
 
         // Also check for craft data and insert it separately
         try {
-          const craftData: genshindb.Craft | undefined = genshindb.crafts(materialName, {
-            queryLanguages: [queryLanguage],
-          });
+          const craftData: genshindb.Craft | undefined = genshindb.crafts(
+            materialName,
+            {
+              queryLanguages: [queryLanguage],
+            },
+          );
 
-            if (craftData && craftData.recipe && craftData.recipe.length > 0) {
+          if (craftData && craftData.recipe && craftData.recipe.length > 0) {
             // Map craft recipe items
             const recipeItems = craftData.recipe.map((r: any) => ({
               id: r.id,
@@ -168,11 +175,12 @@ export async function syncMaterials(db: Database): Promise<SyncStats> {
               resultCount: craftData.resultCount || 1,
             };
 
-            // Insert or replace craft data into simplified material_craft schema
+            // Insert or replace craft data using `material_id` only so SQLite
+            // will auto-generate the primary `id` and avoid duplicate PKs.
             await db.run(
-              `INSERT OR REPLACE INTO material_craft (id, material_id, data)
-               VALUES (?, ?, ?)`,
-              [fullMaterial.id, fullMaterial.id, JSON.stringify(craftPayload)]
+              `INSERT OR REPLACE INTO material_craft (material_id, data)
+               VALUES (?, ?)`,
+              [fullMaterial.id, JSON.stringify(craftPayload)],
             );
           }
         } catch (craftError) {
@@ -186,7 +194,13 @@ export async function syncMaterials(db: Database): Promise<SyncStats> {
     }
 
     await commitTransaction(db);
-    logSyncResults('materials', stats.inserted, stats.skipped, stats.errors, stats.totalProcessed);
+    logSyncResults(
+      "materials",
+      stats.inserted,
+      stats.skipped,
+      stats.errors,
+      stats.totalProcessed,
+    );
 
     return stats;
   } catch (error) {

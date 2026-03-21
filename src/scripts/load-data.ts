@@ -58,8 +58,7 @@ async function createTables(db: any) {
 
     await db.exec(`
       CREATE TABLE material_craft (
-        id INTEGER PRIMARY KEY,
-        material_id INTEGER NOT NULL UNIQUE,
+        material_id INTEGER PRIMARY KEY,
         data JSON NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

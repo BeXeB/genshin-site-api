@@ -1,5 +1,5 @@
-import { Database } from 'sqlite';
-import genshindb from 'genshin-db';
+import { Database } from "sqlite";
+import genshindb from "genshin-db";
 import {
   normalizeGameName,
   insertIfMissing,
@@ -7,7 +7,9 @@ import {
   beginTransaction,
   commitTransaction,
   rollbackTransaction,
-} from '../utils/data-sync';
+} from "../utils/data-sync";
+import { mapCostRecord } from '../utils/data-sync';
+import { StatType, Weapon, WeaponType } from "../models";
 
 interface SyncStats {
   inserted: number;
@@ -32,12 +34,12 @@ export async function syncWeapons(db: Database): Promise<SyncStats> {
 
   try {
     // Get all weapon names from genshin-db
-    const weaponNames = genshindb.weapons('names', {
+    const weaponNames = genshindb.weapons("names", {
       matchCategories: true,
     });
 
     if (!weaponNames || weaponNames.length === 0) {
-      console.error('No weapons found in genshin-db');
+      console.error("No weapons found in genshin-db");
       return stats;
     }
 
@@ -60,40 +62,57 @@ export async function syncWeapons(db: Database): Promise<SyncStats> {
 
         const normalizedName = normalizeGameName(fullWeapon.name);
 
-        // Compute weapon stats at all levels and ascensions using the stats function
-        const rarity = fullWeapon.rarity;
-        const maxLevel = rarity === 1 || rarity === 2 ? 70 : 90;
-        const ascensionLevels = rarity === 1 || rarity === 2
-          ? [20, 40, 50, 60, 70]
-          : [20, 40, 50, 60, 70, 80, 90];
+        // Compute weapon stats at all levels and ascensions (match update-weapons.ts)
+        const rarity = fullWeapon.rarity as number;
+        const levels: number[] = Array.from({ length: rarity > 2 ? 90 : 70 }, (_, i) => i + 1);
+        const ascensionLevels: number[] = rarity > 2 ? [20, 40, 50, 60, 70, 80] : [20, 40, 50, 60];
 
         const weaponStats: Record<string, any> = {};
 
         // Get stats at all levels
-        for (let level = 1; level <= maxLevel; level++) {
+        for (const level of levels) {
           try {
-            const stats = (fullWeapon.stats as Function)(level);
-            weaponStats[`level_${level}`] = {
-              level: level,
-              ascension: stats.ascension,
-              attack: stats.attack,
-              specialized: stats.specialized,
+            const s = (fullWeapon as any).stats(level);
+            weaponStats[level] = {
+              level,
+              ascension: s.ascension,
+              attack: s.attack,
+              specialized: s.specialized,
             };
           } catch (e) {
-            // Skip if stats not available for this level
+            // ignore
+          }
+        }
+
+        // Get ascension '+' stats
+        for (const ascLevel of ascensionLevels) {
+          try {
+            const s = (fullWeapon as any).stats(ascLevel, '+');
+            weaponStats[ascLevel + '+'] = {
+              level: ascLevel,
+              ascension: s.ascension,
+              attack: s.attack,
+              specialized: s.specialized,
+            };
+          } catch (e) {
+            // ignore
           }
         }
 
         // Map weapon data using ACTUAL field names from genshin-db types
-        const weaponData = JSON.stringify({
+        const weaponDataObj: Weapon = {
+          id: fullWeapon.id,
           name: fullWeapon.name,
-          dupealias: fullWeapon.dupealias,
-          description: fullWeapon.description,
-          weaponType: fullWeapon.weaponType,
+          normalizedName,
+          description: fullWeapon.description || "",
+          descriptionRaw: (fullWeapon as any).descriptionRaw || "",
+          weaponType: fullWeapon.weaponType as WeaponType,
+          weaponText: fullWeapon.weaponText || "",
           rarity: fullWeapon.rarity,
-          story: fullWeapon.story,
-          baseAtkValue: fullWeapon.baseAtkValue,
-          mainStatType: fullWeapon.mainStatType,
+          story: fullWeapon.story || "",
+          baseAtkValue: fullWeapon.baseAtkValue || 0,
+          mainStatType: fullWeapon.mainStatType as StatType,
+          mainStatText: fullWeapon.mainStatText,
           baseStatText: fullWeapon.baseStatText,
           effectName: fullWeapon.effectName,
           effectTemplateRaw: fullWeapon.effectTemplateRaw,
@@ -102,25 +121,26 @@ export async function syncWeapons(db: Database): Promise<SyncStats> {
           r3: fullWeapon.r3,
           r4: fullWeapon.r4,
           r5: fullWeapon.r5,
-          costs: fullWeapon.costs,
-          images: fullWeapon.images,
-          version: fullWeapon.version,
-        });
+          costs: mapCostRecord(fullWeapon.costs || {}) as any,
+          images: {
+            filename_icon: fullWeapon.images?.filename_icon,
+            filename_awakenIcon: fullWeapon.images?.filename_awakenIcon,
+            filename_gacha: fullWeapon.images?.filename_gacha,
+          },
+          version: fullWeapon.version || "1.0",
+          stats: weaponStats,
+        };
 
         // Consolidate weapon data and stats into single JSON `data` column
-        const weaponPayload = {
-          meta: fullWeapon,
-          stats: weaponStats,
-          version: fullWeapon.version || '1.0',
-        };
+        const weaponPayload = weaponDataObj;
 
         // Insert using genshin-db id as the primary key
         const result = await insertIfMissing(
           db,
-          'weapons',
+          "weapons",
           normalizedName,
-          ['id', 'normalized_name', 'data'],
-          [fullWeapon.id, normalizedName, JSON.stringify(weaponPayload)]
+          ["id", "normalized_name", "data"],
+          [fullWeapon.id, normalizedName, JSON.stringify(weaponPayload)],
         );
 
         if (result.inserted) {
@@ -135,7 +155,13 @@ export async function syncWeapons(db: Database): Promise<SyncStats> {
     }
 
     await commitTransaction(db);
-    logSyncResults('weapons', stats.inserted, stats.skipped, stats.errors, stats.totalProcessed);
+    logSyncResults(
+      "weapons",
+      stats.inserted,
+      stats.skipped,
+      stats.errors,
+      stats.totalProcessed,
+    );
 
     return stats;
   } catch (error) {

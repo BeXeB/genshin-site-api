@@ -26,12 +26,13 @@ export async function loadMaterialsMap(db: any): Promise<Map<number, Material>> 
   for (const row of materialRows) {
     try {
       const material = JSON.parse(row.data) as Material;
-      
+
       // Also load craft data if it exists
       const craftRow = await db.get(
         'SELECT data FROM material_craft WHERE material_id = ?',
         [row.id]
       );
+
 
       if (craftRow) {
         const craftData = JSON.parse(craftRow.data);
@@ -42,7 +43,7 @@ export async function loadMaterialsMap(db: any): Promise<Map<number, Material>> 
         };
       }
 
-      map.set(material.id, material);
+      map.set(row.id, material);
     } catch (error) {
       console.error(`Failed to parse material data for id ${row.id}:`, error);
     }

@@ -8,6 +8,8 @@ import {
   commitTransaction,
   rollbackTransaction,
 } from '../utils/data-sync';
+import { mapCostRecord } from '../utils/data-sync';
+import { Character, CharacterProfile, ElementType, StatType, WeaponType } from '../models';
 
 interface SyncStats {
   inserted: number;
@@ -61,62 +63,138 @@ export async function syncCharacters(db: Database): Promise<SyncStats> {
         const normalizedName = normalizeGameName(fullCharacter.name);
 
         // Fetch talents separately
-        let talentsData: string | null = null;
+        let talents: any | null = null;
         try {
-          const talents = genshindb.talents(characterName, {
+          talents = genshindb.talents(characterName, {
             queryLanguages: [queryLanguage],
-          });
-          if (talents) {
-            talentsData = JSON.stringify(talents);
-          }
+          }) as any;
         } catch (e) {
           console.warn(`Could not fetch talents for ${characterName}`);
         }
 
         // Fetch constellations separately
-        let constellationData: string | null = null;
+        let constellations: any | null = null;
         try {
-          const constellations = genshindb.constellations(characterName, {
+          constellations = genshindb.constellations(characterName, {
             queryLanguages: [queryLanguage],
-          });
-          if (constellations) {
-            constellationData = JSON.stringify(constellations);
-          }
+          }) as any;
         } catch (e) {
           console.warn(`Could not fetch constellations for ${characterName}`);
         }
 
-        // Map character profile data - using ACTUAL field names from genshin-db types
-        const profileData = JSON.stringify({
+        // Build sanitized profile object and typed Character payload
+        const profile: CharacterProfile = {
+          id: fullCharacter.id,
           name: fullCharacter.name,
-          fullname: fullCharacter.fullname,
+          normalizedName,
           title: fullCharacter.title,
           description: fullCharacter.description,
+          weaponType: fullCharacter.weaponType as WeaponType,
+          weaponText: fullCharacter.weaponText || '',
+          qualityType: (fullCharacter.qualityType as any) || undefined,
           rarity: fullCharacter.rarity,
-          elementType: fullCharacter.elementType,
-          weaponType: fullCharacter.weaponType,
-          substatType: fullCharacter.substatType,
-          gender: fullCharacter.gender,
-          bodyType: fullCharacter.bodyType,
-          associationType: fullCharacter.associationType,
-          region: fullCharacter.region,
-          affiliation: fullCharacter.affiliation,
-          birthday: fullCharacter.birthday,
           birthdaymmdd: fullCharacter.birthdaymmdd,
+          birthday: fullCharacter.birthday,
+          elementType: fullCharacter.elementType as ElementType,
+          elementText: fullCharacter.elementText || '',
+          affiliation: fullCharacter.affiliation,
+          region: fullCharacter.region,
+          substatType: fullCharacter.substatType as StatType,
+          substatText: fullCharacter.substatText || '',
           constellation: fullCharacter.constellation,
-          cv: fullCharacter.cv,
-          costs: fullCharacter.costs,
-          images: fullCharacter.images,
+          costs: mapCostRecord(fullCharacter.costs) as any,
+          images: {
+            filename_icon: fullCharacter.images?.filename_icon,
+            filename_iconCard: fullCharacter.images?.filename_iconCard,
+            filename_sideIcon: fullCharacter.images?.filename_sideIcon,
+            filename_gachaSplash: fullCharacter.images?.filename_gachaSplash,
+            filename_gachaSlice: fullCharacter.images?.filename_gachaSlice,
+          },
           version: fullCharacter.version,
-        });
-
-        // Consolidate full character data into single JSON `data` column
-        const characterPayload = {
-          profile: fullCharacter,
-          talents: talentsData ? JSON.parse(talentsData) : null,
-          constellations: constellationData ? JSON.parse(constellationData) : null,
-          profileData: JSON.parse(profileData),
           isTraveler: normalizedName.includes('traveler') || normalizedName.includes('aether') || normalizedName.includes('lumine'),
+        };
+
+        // Sanitize talents images if present
+        const sanitizedTalents = talents
+          ? {
+              ...talents,
+              images: talents.images
+                ? {
+                    filename_combat1: talents.images.filename_combat1,
+                    filename_combat2: talents.images.filename_combat2,
+                    filename_combat3: talents.images.filename_combat3,
+                    filename_passive1: talents.images.filename_passive1,
+                    filename_passive2: talents.images.filename_passive2,
+                    filename_passive3: talents.images.filename_passive3,
+                    filename_passive4: talents.images.filename_passive4,
+                  }
+                : undefined,
+            }
+          : null;
+
+        // Sanitize constellation images if present
+        const sanitizedConstellations = constellations
+          ? {
+              ...constellations,
+              images: constellations.images
+                ? {
+                    filename_c1: constellations.images.filename_c1,
+                    filename_c2: constellations.images.filename_c2,
+                    filename_c3: constellations.images.filename_c3,
+                    filename_c4: constellations.images.filename_c4,
+                    filename_c5: constellations.images.filename_c5,
+                    filename_c6: constellations.images.filename_c6,
+                    filename_constellation: constellations.images.filename_constellation,
+                  }
+                : undefined,
+            }
+          : null;
+
+        // Compute character stats across levels and ascensions (match update-characters.ts)
+        const characterStats: Record<string, any> = {};
+        // levels 1..90, plus 95 and 100
+        const levels: number[] = Array.from({ length: 90 }, (_, i) => i + 1);
+        levels.push(95);
+        levels.push(100);
+        const ascensionLevels: number[] = [20, 40, 50, 60, 70, 80];
+
+        for (const level of levels) {
+          try {
+            const s = (fullCharacter as any).stats(level);
+            characterStats[level] = {
+              level: level,
+              ascension: s.ascension,
+              hp: s.hp,
+              attack: s.attack,
+              defense: s.defense,
+              specialized: s.specialized,
+            };
+          } catch (e) {
+            // ignore missing stats for some levels
+          }
+        }
+
+        for (const ascLevel of ascensionLevels) {
+          try {
+            const s = (fullCharacter as any).stats(ascLevel, '+');
+            characterStats[ascLevel + '+'] = {
+              level: ascLevel,
+              ascension: s.ascension,
+              hp: s.hp,
+              attack: s.attack,
+              defense: s.defense,
+              specialized: s.specialized,
+            };
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        const characterPayload: Character = {
+          profile,
+          skills: sanitizedTalents || undefined,
+          stats: characterStats,
+          constellation: sanitizedConstellations || undefined,
         };
 
         // Insert using genshin-db id as the primary key

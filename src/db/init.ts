@@ -74,10 +74,10 @@ async function createTables(db: Database): Promise<void> {
   `);
 
   // Material craft recipes table
+  // Use material_id as the primary key so each material has at most one craft entry
   await db.exec(`
     CREATE TABLE IF NOT EXISTS material_craft (
-      id INTEGER PRIMARY KEY,
-      material_id INTEGER NOT NULL UNIQUE,
+      material_id INTEGER PRIMARY KEY,
       data JSON NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

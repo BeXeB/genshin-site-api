@@ -3,5 +3,5 @@ export type Guide = {
   name?: string;
   description: string;
   imageUrl?: string;
-  content?: string;
+  contentPath?: string;
 };

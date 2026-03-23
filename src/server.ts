@@ -24,6 +24,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static images
 app.use('/images', express.static(path.join(__dirname, '../public/images')));
+app.use('/guides', express.static(path.join(__dirname, '../public/guides')));
 
 // Initialize database on startup
 let db: any;

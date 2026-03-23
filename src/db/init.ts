@@ -85,14 +85,14 @@ async function createTables(db: Database): Promise<void> {
     )
   `);
 
-  // Guides table (unchanged)
+  // Guides table (storing paths instead of content)
   await db.exec(`
     CREATE TABLE IF NOT EXISTS guides (
       slug TEXT PRIMARY KEY,
       name TEXT,
       description TEXT NOT NULL,
       imageUrl TEXT,
-      content TEXT,
+      contentPath TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
